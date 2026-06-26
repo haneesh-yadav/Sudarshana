@@ -1,0 +1,272 @@
+:root {
+  --bg: #161616;
+  --panel: #1c1c1c;
+  --panel-2: #212121;
+  --panel-3: #262626;
+  --border: rgba(255,255,255,0.07);
+  --border-2: rgba(255,255,255,0.10);
+  --text: #f3f3f1;
+  --text-dim: #9a9a96;
+  --text-dimmer: #6c6c69;
+  --accent: #e3f25f;
+  --accent-dim: rgba(227,242,95,0.14);
+  --green: #74e08a;
+  --green-bg: rgba(116,224,138,0.14);
+  --orange: #f0a13c;
+  --orange-bg: rgba(240,161,60,0.14);
+  --red: #ef6a5f;
+  --red-bg: rgba(239,106,95,0.16);
+  --purple: #a98ce8;
+  --purple-bg: rgba(169,140,232,0.14);
+  --radius-lg: 22px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Poppins', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.dashboard-active {
+  zoom: 0.67;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ============================================================
+   Accessibility baseline
+   ============================================================ */
+
+/* Visible keyboard focus everywhere, but only for keyboard users --
+   mouse/touch clicks don't show a ring (focus-visible handles that
+   distinction natively). Nothing in this app should ever set
+   outline:none without this fallback. */
+a, button, input, [tabindex] {
+  outline: none;
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+.sb-btn:focus-visible,
+.tab:focus-visible,
+.t-data:focus-visible,
+.section-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Screen-reader-only utility: visually hidden but still announced and
+   still reachable by keyboard/AT. Use for icon-only buttons that need
+   an accessible name beyond their title attribute, and for live-region
+   status text. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respect OS-level reduced-motion preference: kill non-essential
+   transitions/animations (drawer slide, fade transitions, etc) for
+   anyone who's asked for it. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.app {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  padding: 14px;
+  gap: 14px;
+  overflow: hidden;
+  position: relative;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Topbar (and Sidebar, outside .main entirely) never scroll -- only the
+   content below the topbar does. This wrapper is the single scroll
+   container for every page; Topbar/Sidebar markup is untouched and stays
+   pinned in place regardless of how tall a page's content is. */
+.page-content {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  /* Fade zone at top/bottom is toggled via the .has-fade-top /
+     .has-fade-bottom classes (set in JS based on scroll position) so
+     content isn't clipped when it's fully visible or scrolled to an
+     edge -- only the actual overflowing portion fades as it scrolls
+     under, never the live content. */
+  -webkit-mask-image: linear-gradient(to bottom, black, black);
+  mask-image: linear-gradient(to bottom, black, black);
+  transition: mask-image .1s linear, -webkit-mask-image .1s linear;
+}
+
+.page-content.has-fade-top.has-fade-bottom {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, black 24px, black calc(100% - 24px), transparent 100%);
+}
+.page-content.has-fade-top:not(.has-fade-bottom) {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 24px, black 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, black 24px, black 100%);
+}
+.page-content.has-fade-bottom:not(.has-fade-top) {
+  -webkit-mask-image: linear-gradient(to bottom, black 0, black calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0, black calc(100% - 24px), transparent 100%);
+}
+
+/* Thin, unobtrusive scrollbar matching the dark theme. */
+.page-content::-webkit-scrollbar {
+  width: 6px;
+}
+.page-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.page-content::-webkit-scrollbar-thumb {
+  background: var(--border-2);
+  border-radius: 999px;
+}
+.page-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dimmer);
+}
+.page-content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-2) transparent;
+}
+
+/* Defensive flex hygiene: a wide table/grid inside any page (e.g. the
+   Threads/Security Posture/Reports tables) must never be able to force
+   .main or .page-content wider than the viewport -- that's what was
+   squeezing the topbar. min-width:0 has to cascade to every direct
+   child, not just the scroll container itself. */
+.page-content > * {
+  min-width: 0;
+}
+
+/* ---------- filter row (shared layout) ---------- */
+.filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab.active {
+  background: var(--panel-3);
+  color: var(--text);
+}
+.tab b {
+  background: rgba(255,255,255,0.10);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.tab.active b {
+  background: #111;
+  color: var(--text);
+}
+.filter-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  margin-left: 4px;
+}
+.filter-icon-btn .material-icons-round {
+  font-size: 14px;
+}
+.toggles {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+}
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.avg-trust {
+  color: var(--green);
+  font-weight: 700;
+}

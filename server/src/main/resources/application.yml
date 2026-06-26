@@ -1,0 +1,58 @@
+server:
+  port: 8080
+
+google:
+  oauth2:
+    client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
+    client-secret: ${GOOGLE_CLIENT_SECRET:your-google-client-secret}
+
+sudarshana:
+  security:
+    jwt:
+      secret: ${SUDARSHANA_JWT_SECRET}
+  sync:
+    limit: 20
+
+spring:
+  application:
+    name: sudarshana-server
+  profiles:
+    active: h2
+
+---
+spring:
+  config:
+    activate:
+      on-profile: h2
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/sudarshana;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.h2.Driver
+    hikari:
+      maximum-pool-size: 10
+      idle-timeout: 30000
+      max-lifetime: 1800000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    database-platform: org.hibernate.dialect.H2Dialect
+
+---
+spring:
+  config:
+    activate:
+      on-profile: postgres
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/Sudarshana}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
