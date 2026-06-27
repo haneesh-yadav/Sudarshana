@@ -24,8 +24,6 @@ services:
           property: password
       - key: SUDARSHANA_JWT_SECRET
         generateValue: true
-      - key: SUDARSHANA_ENCRYPTION_KEY
-        generateValue: true
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

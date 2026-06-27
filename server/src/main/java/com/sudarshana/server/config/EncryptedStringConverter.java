@@ -25,19 +25,26 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
     private final SecretKeySpec secretKey;
 
     public EncryptedStringConverter() {
+        SecretKeySpec key = null;
         String keyHex = System.getenv("SUDARSHANA_ENCRYPTION_KEY");
-        if (keyHex == null || keyHex.trim().isEmpty()) {
+        if (keyHex != null && !keyHex.trim().isEmpty()) {
+            try {
+                byte[] keyBytes = HexFormat.of().parseHex(keyHex.trim());
+                if (keyBytes.length == 32) {
+                    key = new SecretKeySpec(keyBytes, "AES");
+                } else {
+                    logger.warn("SUDARSHANA_ENCRYPTION_KEY must be 64 hex characters (32 bytes). " +
+                            "Sensitive fields will NOT be encrypted.");
+                }
+            } catch (Exception e) {
+                logger.warn("SUDARSHANA_ENCRYPTION_KEY is not a valid hex string. " +
+                        "Sensitive fields will NOT be encrypted.");
+            }
+        } else {
             logger.warn("SUDARSHANA_ENCRYPTION_KEY not set. Sensitive fields will NOT be encrypted. " +
                     "Generate one with: openssl rand -hex 32");
-            this.secretKey = null;
-            return;
         }
-        byte[] keyBytes = HexFormat.of().parseHex(keyHex.trim());
-        if (keyBytes.length != 32) {
-            throw new IllegalStateException("SUDARSHANA_ENCRYPTION_KEY must be 64 hex characters (32 bytes). " +
-                    "Generate one with: openssl rand -hex 32");
-        }
-        this.secretKey = new SecretKeySpec(keyBytes, "AES");
+        this.secretKey = key;
     }
 
     @Override
