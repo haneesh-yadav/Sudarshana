@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import mapReportToThread from '../utils/mapReportToThread.js';
 import { Link } from 'react-router-dom';
 
@@ -41,13 +41,39 @@ function StatsBar({ stats }) {
    page header
    ============================================================ */
 
-function PageHeader() {
+function PageHeader({ dateRange, setDateRange, showRangeMenu, setShowRangeMenu, rangeMenuRef }) {
   return (
     <div className="page-header">
       <div className="page-sub">Real-time overview</div>
-      <button className="range-btn">
-        <span className="material-icons-round" aria-hidden="true">calendar_today</span> Last 7 days <span className="material-icons-round" aria-hidden="true">keyboard_arrow_down</span>
-      </button>
+      <div ref={rangeMenuRef} style={{ position: "relative" }}>
+        <button className="range-btn" onClick={() => setShowRangeMenu(p => !p)}>
+          <span className="material-icons-round" aria-hidden="true">calendar_today</span> {dateRange.label} <span className="material-icons-round" aria-hidden="true">keyboard_arrow_down</span>
+        </button>
+        {showRangeMenu && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 100,
+            background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.4)", overflow: "hidden", minWidth: 160,
+          }}>
+            {RANGE_OPTIONS.map(opt => (
+              <div key={opt.label}
+                onClick={() => { setDateRange(opt); setShowRangeMenu(false); }}
+                style={{
+                  padding: "10px 16px", fontSize: 13, cursor: "pointer",
+                  background: opt.label === dateRange.label ? "var(--panel-3)" : "transparent",
+                  color: opt.label === dateRange.label ? "var(--text)" : "var(--text-dim)",
+                  fontWeight: opt.label === dateRange.label ? 600 : 400,
+                  transition: "background 0.12s",
+                }}
+                onMouseEnter={e => e.target.style.background = "var(--panel-3)"}
+                onMouseLeave={e => { if (opt.label !== dateRange.label) e.target.style.background = "transparent"; }}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -85,7 +111,7 @@ function TrustGauge({ value = 91.4 }) {
   );
 }
 
-function TrustGaugeCard({ value }) {
+function TrustGaugeCard({ value, delta }) {
   return (
     <div className="gauge-card">
       <div className="gauge-card-head">
@@ -94,9 +120,16 @@ function TrustGaugeCard({ value }) {
       </div>
       <TrustGauge value={value} />
       <div className="gauge-readout">{value}%</div>
-      <div className="gauge-delta good">
-        <span className="material-icons-round" aria-hidden="true">trending_up</span> +0.8pt vs. last week
-      </div>
+      {delta ? (
+        <div className={`gauge-delta ${delta.direction === "up" ? "good" : "bad"}`}>
+          <span className="material-icons-round" aria-hidden="true">{delta.direction === "up" ? "trending_up" : "trending_down"}</span>
+          {delta.direction === "up" ? "+" : ""}{delta.value}pt vs. previous period
+        </div>
+      ) : (
+        <div className="gauge-delta" style={{ color: "var(--text-dimmer)" }}>
+          <span className="material-icons-round" aria-hidden="true">trending_flat</span> No prior data
+        </div>
+      )}
     </div>
   );
 }
@@ -190,8 +223,15 @@ const EMPTY_STATS = [
   { iconName: "mail", label: "Threads", value: 0 },
   { iconName: "warning", label: "Active threats", value: 0, tone: "red" },
   { iconName: "shield", label: "Verified", value: 0, tone: "green" },
-  { iconName: "tag", label: "Avg. trust score", value: "â€”", tone: "accent" },
+  { iconName: "tag", label: "Avg. trust score", value: "—", tone: "accent" },
   { iconName: "schedule", label: "Quarantined", value: 0, tone: "purple" },
+];
+
+const RANGE_OPTIONS = [
+  { label: "Last 7 days", days: 7 },
+  { label: "Last 14 days", days: 14 },
+  { label: "Last 30 days", days: 30 },
+  { label: "All time", days: 0 },
 ];
 
 export default function Home() {
@@ -199,11 +239,28 @@ export default function Home() {
   const [criticalFeed, setCriticalFeed] = useState([]);
   const [watchDomains, setWatchDomains] = useState([]);
   const [trustScore, setTrustScore] = useState(0);
+  const [trustDelta, setTrustDelta] = useState(null);
+  const [dateRange, setDateRange] = useState(RANGE_OPTIONS[0]);
+  const [showRangeMenu, setShowRangeMenu] = useState(false);
+  const rangeMenuRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!showRangeMenu) return;
+    const handler = (e) => {
+      if (rangeMenuRef.current && !rangeMenuRef.current.contains(e.target)) setShowRangeMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showRangeMenu]);
   useEffect(() => {
     const fetchHomeData = async () => {
       try {
         const userId = localStorage.getItem("selectedUserId") || "";
-        const url = `/api/threads${userId ? `?userId=${userId}` : ""}`;
+        let url = `/api/threads${userId ? `?userId=${userId}` : ""}`;
+        if (dateRange.days > 0) {
+          const startDate = Date.now() - dateRange.days * 24 * 60 * 60 * 1000;
+          url += `${userId ? "&" : "?"}startDate=${startDate}`;
+        }
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
@@ -212,7 +269,7 @@ export default function Home() {
           const activeThreats = mapped.filter(t => t.status === "Critical" || t.status === "Flagged").length;
           const verified = mapped.filter(t => t.status === "Verified").length;
           const quarantined = mapped.filter(t => t.status === "Quarantined").length;
-          const avgTrust = mapped.length > 0 ? Math.round(mapped.reduce((sum, t) => sum + t.trust, 0) / mapped.length) : 91.4;
+          const avgTrust = mapped.length > 0 ? Math.round(mapped.reduce((sum, t) => sum + t.trust, 0) / mapped.length) : 0;
 
           const dynamicStats = [
             { iconName: "mail", label: "Threads", value: mapped.length },
@@ -223,6 +280,28 @@ export default function Home() {
           ];
           setStats(dynamicStats);
           setTrustScore(avgTrust);
+
+          // Compute trust delta by fetching previous period data
+          if (dateRange.days > 0) {
+            try {
+              const prevStart = Date.now() - dateRange.days * 2 * 24 * 60 * 60 * 1000;
+              const prevEnd = Date.now() - dateRange.days * 24 * 60 * 60 * 1000;
+              let prevUrl = `/api/threads${userId ? `?userId=${userId}` : ""}`;
+              prevUrl += `${userId ? "&" : "?"}startDate=${prevStart}&endDate=${prevEnd}`;
+              const prevRes = await fetch(prevUrl);
+              if (prevRes.ok) {
+                const prevData = await prevRes.json();
+                const prevMapped = prevData.map(mapReportToThread);
+                const prevAvgTrust = prevMapped.length > 0
+                  ? Math.round(prevMapped.reduce((sum, t) => sum + t.trust, 0) / prevMapped.length)
+                  : avgTrust;
+                const delta = avgTrust - prevAvgTrust;
+                setTrustDelta(delta !== 0 ? { value: delta, direction: delta > 0 ? "up" : "down" } : null);
+              }
+            } catch {
+              setTrustDelta(null);
+            }
+          }
 
           const feed = mapped
             .filter(t => t.status === "Critical" || t.status === "Flagged")
@@ -274,7 +353,7 @@ export default function Home() {
     };
     window.addEventListener('tg-user-changed', handleUserChange);
     return () => window.removeEventListener('tg-user-changed', handleUserChange);
-  }, []);
+  }, [dateRange]);
 
   return (
     <>
@@ -451,14 +530,14 @@ export default function Home() {
       `}</style>
 
       <StatsBar stats={stats} />
-      <PageHeader />
+      <PageHeader dateRange={dateRange} setDateRange={setDateRange} showRangeMenu={showRangeMenu} setShowRangeMenu={setShowRangeMenu} rangeMenuRef={rangeMenuRef} />
 
       <div className="dash-grid">
         <div className="dash-col">
           <CriticalFeedCard items={criticalFeed} />
         </div>
         <div className="dash-col">
-          <TrustGaugeCard value={trustScore} />
+          <TrustGaugeCard value={trustScore} delta={trustDelta} />
           <WatchListCard domains={watchDomains} />
         </div>
       </div>

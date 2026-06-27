@@ -451,7 +451,7 @@ export default function LandingPage() {
   };
 
   useEffect(() => {
-    fetch('http://localhost:8080/api/auth/config')
+    fetch('/api/auth/config')
       .then((res) => res.json())
       .then((data) => {
         if (data.clientId) setGoogleClientId(data.clientId);
@@ -466,7 +466,7 @@ export default function LandingPage() {
 
     setCheckingEmail(true);
     try {
-      const response = await fetch('http://localhost:8080/api/auth/check-email', {
+      const response = await fetch('/api/auth/check-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -494,7 +494,7 @@ export default function LandingPage() {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:8080/api/auth/login', {
+      const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

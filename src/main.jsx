@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 
-// Intercept all fetch requests to inject JWT bearer token, map API URLs dynamically, and handle 401 logouts
+// Intercept all fetch requests to inject JWT bearer token and handle 401 logouts
 // API calls use a relative path (/api/...) so Vite's proxy forwards them to the backend server.
 // For production deployments, set VITE_API_BASE_URL to the backend URL (e.g. https://api.yourdomain.com).
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -12,8 +12,9 @@ window.fetch = async (input, init) => {
   const token = localStorage.getItem('token');
   
   let targetInput = input;
-  if (typeof input === 'string' && input.startsWith('http://localhost:8080/api/')) {
-    targetInput = input.replace('http://localhost:8080', API_BASE_URL);
+  // Map relative /api/ paths to the full backend URL if VITE_API_BASE_URL is set
+  if (API_BASE_URL && typeof input === 'string' && input.startsWith('/api/')) {
+    targetInput = API_BASE_URL + input;
   }
 
   const isApiCall = typeof targetInput === 'string' && targetInput.includes('/api/');

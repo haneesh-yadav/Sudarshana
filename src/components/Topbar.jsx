@@ -19,11 +19,11 @@ import { showToast } from '../utils/toast.js';
 // shown on the Dashboard itself (see Home.jsx's StatsBar) -- kept here as
 // an exported default so Home.jsx doesn't need to duplicate the data.
 export const DEFAULT_STATS = [
-  { iconName: "mail", label: "Threads", value: "1,248" },
-  { iconName: "warning", label: "Active threats", value: "7" },
-  { iconName: "shield", label: "Verified", value: "1,189" },
-  { iconName: "tag", label: "Avg. trust score", value: "91.4%" },
-  { iconName: "schedule", label: "Quarantined", value: "4" },
+  { iconName: "mail", label: "Threads", value: 0 },
+  { iconName: "warning", label: "Active threats", value: 0 },
+  { iconName: "shield", label: "Verified", value: 0 },
+  { iconName: "tag", label: "Avg. trust score", value: "—" },
+  { iconName: "schedule", label: "Quarantined", value: 0 },
 ];
 
 export default function Topbar({
@@ -124,59 +124,61 @@ export default function Topbar({
   // â”€â”€ Notifications dropdown â”€â”€
   const [notifOpen, setNotifOpen] = React.useState(false);
   const notifRef = React.useRef(null);
-  const [notifications, setNotifications] = React.useState([
-    {
-      id: 1,
-      icon: "warning",
-      tone: "danger",
-      title: "New threat detected",
-      detail: "Suspicious DKIM mismatch on thread from billing@vendor-pay.com",
-      time: "2m ago",
-      read: false,
-    },
-    {
-      id: 2,
-      icon: "shield",
-      tone: "warning",
-      title: "Trust score dropped",
-      detail: "Thread \"Q3 Invoice Approval\" trust score fell to 62%",
-      time: "18m ago",
-      read: false,
-    },
-    {
-      id: 3,
-      icon: "mail",
-      tone: "neutral",
-      title: "Thread quarantined",
-      detail: "Auto-quarantined 3 messages flagged by behavioral NLP",
-      time: "1h ago",
-      read: false,
-    },
-    {
-      id: 4,
-      icon: "tag",
-      tone: "neutral",
-      title: "Weekly summary ready",
-      detail: "Your Sudarshana activity report for last week is ready",
-      time: "Yesterday",
-      read: true,
-    },
-  ]);
+  const [notifications, setNotifications] = React.useState([]);
+
+  React.useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await fetch("/api/notifications");
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data.map(n => ({
+            id: n.id,
+            icon: n.icon,
+            tone: n.tone,
+            title: n.title,
+            detail: n.detail,
+            time: formatNotifTime(n.timestamp),
+            read: n.read,
+          })));
+        }
+      } catch {
+        // backend offline
+      }
+    };
+    fetchNotifications();
+  }, []);
+
+  function formatNotifTime(ts) {
+    if (!ts) return "";
+    const diff = Date.now() - ts;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `${days}d ago`;
+    return new Date(ts).toLocaleDateString();
+  }
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const toggleNotifOpen = () => setNotifOpen(prev => !prev);
 
-  const markAllRead = () => {
+  const markAllRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    try { await fetch("/api/notifications/read-all", { method: "PUT" }); } catch { /* best effort */ }
   };
 
-  const dismissNotification = (id) => {
+  const dismissNotification = async (id) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    try { await fetch(`/api/notifications/${id}`, { method: "DELETE" }); } catch { /* best effort */ }
   };
 
-  const markOneRead = (id) => {
+  const markOneRead = async (id) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    try { await fetch(`/api/notifications/${id}/read`, { method: "PUT" }); } catch { /* best effort */ }
   };
 
   React.useEffect(() => {

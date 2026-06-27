@@ -1,10 +1,13 @@
 package com.sudarshana.server.controller;
 
 import com.sudarshana.server.model.EmailMessage;
+import com.sudarshana.server.model.HijackScenario;
 import com.sudarshana.server.model.MessageSecurityResult;
+import com.sudarshana.server.model.Notification;
 import com.sudarshana.server.model.ThreadSecurityReport;
 import com.sudarshana.server.model.User;
 import com.sudarshana.server.repository.UserRepository;
+import com.sudarshana.server.repository.NotificationRepository;
 import com.sudarshana.server.service.EmailSenderService;
 import com.sudarshana.server.service.SudarshanaService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,16 +27,19 @@ public class ThreadController {
     private final UserRepository userRepository;
     private final EmailSenderService emailSenderService;
     private final com.sudarshana.server.repository.AuditLogRepository auditLogRepository;
+    private final NotificationRepository notificationRepository;
 
     @Autowired
     public ThreadController(SudarshanaService sudarshanaService,
                             UserRepository userRepository,
                             EmailSenderService emailSenderService,
-                            com.sudarshana.server.repository.AuditLogRepository auditLogRepository) {
+                            com.sudarshana.server.repository.AuditLogRepository auditLogRepository,
+                            NotificationRepository notificationRepository) {
         this.sudarshanaService = sudarshanaService;
         this.userRepository = userRepository;
         this.emailSenderService = emailSenderService;
         this.auditLogRepository = auditLogRepository;
+        this.notificationRepository = notificationRepository;
     }
 
     private User getAuthenticatedUser() {
@@ -45,10 +51,38 @@ public class ThreadController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ThreadSecurityReport>> getAllReports() {
+    public ResponseEntity<List<ThreadSecurityReport>> getAllReports(
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) Long startDate,
+            @RequestParam(required = false) Long endDate) {
         User user = getAuthenticatedUser();
-        Long userId = user != null ? user.getId() : null;
-        List<ThreadSecurityReport> reports = sudarshanaService.getAllReports(userId);
+        Long resolvedUserId = userId != null ? userId : (user != null ? user.getId() : null);
+        List<ThreadSecurityReport> reports = sudarshanaService.getAllReports(resolvedUserId);
+        
+        // Apply date-range filtering on messages if dates are provided
+        if (startDate != null || endDate != null) {
+            reports = reports.stream().map(report -> {
+                List<MessageSecurityResult> filteredMessages = report.getMessages().stream()
+                    .filter(m -> {
+                        long ts = m.getTimestamp();
+                        if (startDate != null && ts < startDate) return false;
+                        if (endDate != null && ts > endDate) return false;
+                        return true;
+                    })
+                    .toList();
+                
+                ThreadSecurityReport filtered = ThreadSecurityReport.builder()
+                    .threadId(report.getThreadId())
+                    .chainValid(report.isChainValid())
+                    .messagesAnalyzedCount(filteredMessages.size())
+                    .riskLevel(report.getRiskLevel())
+                    .brokenAtIndex(report.getBrokenAtIndex())
+                    .messages(filteredMessages)
+                    .build();
+                return filtered;
+            }).filter(r -> !r.getMessages().isEmpty()).toList();
+        }
+        
         return ResponseEntity.ok(reports);
     }
 
@@ -123,6 +157,17 @@ public class ThreadController {
 
         boolean success = sudarshanaService.simulateHijack(threadId, messageId, spoofedBody, userId);
         if (success) {
+            // Create notification for the user
+            if (user != null) {
+                notificationRepository.save(new Notification(
+                    user.getId(),
+                    System.currentTimeMillis(),
+                    "warning",
+                    "danger",
+                    "Hijack simulation executed",
+                    "Thread '" + threadId + "' was tampered with. Cryptographic chain is now broken."
+                ));
+            }
             return ResponseEntity.ok(Map.of(
                     "status", "SUCCESS",
                     "message", "Message tampered successfully. The cryptographic chain is now broken."
@@ -150,10 +195,28 @@ public class ThreadController {
         String userEmail = user != null ? user.getEmail() : "demo@sudarshana.com";
 
         sudarshanaService.blacklistDomain(domain, userEmail);
+
+        // Create notification for the user
+        if (user != null) {
+            notificationRepository.save(new Notification(
+                user.getId(),
+                System.currentTimeMillis(),
+                "block",
+                "warning",
+                "Domain blacklisted",
+                "Domain '" + domain + "' has been added to the security blacklist."
+            ));
+        }
+
         return ResponseEntity.ok(Map.of(
                 "status", "SUCCESS",
                 "message", "Domain '" + domain + "' added to security blacklist."
         ));
+    }
+
+    @GetMapping("/hijack-scenarios")
+    public ResponseEntity<List<HijackScenario>> getHijackScenarios() {
+        return ResponseEntity.ok(HijackScenario.defaults());
     }
 
     private String cleanEmailAddress(String emailStr) {

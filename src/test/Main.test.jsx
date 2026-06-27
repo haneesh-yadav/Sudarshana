@@ -25,9 +25,9 @@ describe('LandingPage', () => {
     localStorage.clear();
   });
 
-  it('renders brand name', () => {
+  it('renders brand name', async () => {
     renderLanding();
-    const elements = screen.getAllByText('Sudarshana');
+    const elements = await screen.findAllByText('Sudarshana');
     expect(elements.length).toBeGreaterThanOrEqual(1);
   });
 

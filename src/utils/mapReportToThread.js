@@ -1,3 +1,21 @@
+function formatRelativeTime(timestamp) {
+  if (!timestamp) return "Just now";
+  const now = Date.now();
+  const diffMs = now - timestamp;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+  const diffWeek = Math.floor(diffDay / 7);
+
+  if (diffSec < 60) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  if (diffWeek < 4) return `${diffWeek}w ago`;
+  return new Date(timestamp).toLocaleDateString();
+}
+
 export default function mapReportToThread(report) {
   const lastMsg = report.messages[report.messages.length - 1];
 
@@ -62,7 +80,7 @@ export default function mapReportToThread(report) {
   });
   const attachmentSandbox = Math.round(100 - maxAttRisk);
 
-  const last = "Just now";
+  const last = formatRelativeTime(lastMsg?.timestamp);
 
   let flag = null;
   if (!report.chainValid) {

@@ -73,13 +73,36 @@ const RISK_STYLE = {
    shared bits
    ============================================================ */
 
-function PageHeader({ sub }) {
+function PageHeader({ sub, dateRange, setDateRange, showRangeMenu, setShowRangeMenu, rangeMenuRef }) {
   return (
     <div className="page-header">
       <div className="page-sub">{sub}</div>
-      <button className="range-btn">
-        <span className="material-icons-round">calendar_today</span> Last 7 days <span className="material-icons-round">keyboard_arrow_down</span>
-      </button>
+      <div ref={rangeMenuRef} style={{ position: "relative" }}>
+        <button className="range-btn" onClick={() => setShowRangeMenu(p => !p)}>
+          <span className="material-icons-round">calendar_today</span> {dateRange.label} <span className="material-icons-round">keyboard_arrow_down</span>
+        </button>
+        {showRangeMenu && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 100,
+            background: "var(--panel)", border: "1px solid var(--border)", borderRadius: 12,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.4)", overflow: "hidden", minWidth: 160,
+          }}>
+            {RANGE_OPTIONS.map(opt => (
+              <div key={opt.label}
+                onClick={() => { setDateRange(opt); setShowRangeMenu(false); }}
+                style={{
+                  padding: "10px 16px", fontSize: 13, cursor: "pointer",
+                  background: opt.label === dateRange.label ? "var(--panel-3)" : "transparent",
+                  color: opt.label === dateRange.label ? "var(--text)" : "var(--text-dim)",
+                  fontWeight: opt.label === dateRange.label ? 600 : 400,
+                }}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -711,21 +734,44 @@ function SendersTab({ threads }) {
    ============================================================ */
 
 const SECTION_SUBS = {
-  auth: "SPF / DKIM / DMARC authentication audit Â· live",
-  chain: "Cryptographic chain-of-custody break feed Â· live",
-  senders: "Sender directory & behavioral baselines Â· live",
+  auth: "SPF / DKIM / DMARC authentication audit · live",
+  chain: "Cryptographic chain-of-custody break feed · live",
+  senders: "Sender directory & behavioral baselines · live",
 };
+
+const RANGE_OPTIONS = [
+  { label: "Last 7 days", days: 7 },
+  { label: "Last 14 days", days: 14 },
+  { label: "Last 30 days", days: 30 },
+  { label: "All time", days: 0 },
+];
 
 
 export default function SecurityPosturePage() {
   const [section, setSection] = useState("auth");
   const [threads, setThreads] = useState([]);
+  const [dateRange, setDateRange] = useState(RANGE_OPTIONS[0]);
+  const [showRangeMenu, setShowRangeMenu] = useState(false);
+  const rangeMenuRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!showRangeMenu) return;
+    const handler = (e) => {
+      if (rangeMenuRef.current && !rangeMenuRef.current.contains(e.target)) setShowRangeMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showRangeMenu]);
 
   useEffect(() => {
     const fetchPostureData = async () => {
       try {
         const userId = localStorage.getItem("selectedUserId") || "";
-        const url = `/api/threads${userId ? `?userId=${userId}` : ""}`;
+        let url = `/api/threads${userId ? `?userId=${userId}` : ""}`;
+        if (dateRange.days > 0) {
+          const startDate = Date.now() - dateRange.days * 24 * 60 * 60 * 1000;
+          url += `${userId ? "&" : "?"}startDate=${startDate}`;
+        }
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
@@ -743,7 +789,7 @@ export default function SecurityPosturePage() {
     };
     window.addEventListener('tg-user-changed', handleUserChange);
     return () => window.removeEventListener('tg-user-changed', handleUserChange);
-  }, []);
+  }, [dateRange]);
 
   return (
     <>
@@ -1000,7 +1046,7 @@ export default function SecurityPosturePage() {
   ::selection{ background: var(--accent-dim); }
 `}</style>
 
-      <PageHeader sub={SECTION_SUBS[section]} />
+      <PageHeader sub={SECTION_SUBS[section]} dateRange={dateRange} setDateRange={setDateRange} showRangeMenu={showRangeMenu} setShowRangeMenu={setShowRangeMenu} rangeMenuRef={rangeMenuRef} />
       <SectionTabs active={section} setActive={setSection} />
 
       {section === "auth" && <AuthHealthTab threads={threads} />}

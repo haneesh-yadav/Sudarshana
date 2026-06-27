@@ -1,7 +1,13 @@
 import '@testing-library/jest-dom';
 
-// Mock fetch globally
-global.fetch = vi.fn();
+// Mock fetch globally — returns a default empty response for any unmatched call
+global.fetch = vi.fn(() =>
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve([]),
+    text: () => Promise.resolve(''),
+  })
+);
 
 // Mock localStorage
 const localStorageMock = (() => {

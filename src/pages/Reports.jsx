@@ -38,10 +38,10 @@ const FORMAT_ICON = { PDF: "picture_as_pdf", CSV: "table_chart", XLSX: "grid_on"
    page header
    ============================================================ */
 
-function PageHeader() {
+function PageHeader({ lastUpdated }) {
   return (
     <div className="page-header">
-      <div className="page-sub">Board-level summary & exports Â· last updated Just now</div>
+      <div className="page-sub">Board-level summary & exports · last updated {lastUpdated || "—"}</div>
       <button className="range-btn">
         <span className="material-icons-round">calendar_today</span> Last 12 weeks <span className="material-icons-round">keyboard_arrow_down</span>
       </button>
@@ -487,6 +487,19 @@ function ReportsList({ reports, onDownload }) {
   );
 }
 
+function formatReportTime(ts) {
+  if (!ts) return "—";
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
 const triggerCSVDownload = (threads, reportName) => {
   const headers = ["Thread ID", "Subject", "Domain", "Status", "Trust Score", "Chain Integrity", "Message Count"];
   const rows = threads.map(t => [
@@ -727,10 +740,35 @@ export default function ReportsPage() {
         // backend offline
       }
     };
+
+    const fetchSavedReports = async () => {
+      try {
+        const res = await fetch("/api/reports");
+        if (res.ok) {
+          const data = await res.json();
+          setReportsList(data.map(r => ({
+            id: r.id ? `RPT-${String(r.id).padStart(4, "0")}` : r.id,
+            name: r.name,
+            type: r.type,
+            period: r.period,
+            generated: formatReportTime(r.generatedAt),
+            format: r.format,
+            size: r.size || "—",
+            status: r.status,
+            summary: r.summary,
+          })));
+        }
+      } catch {
+        // backend offline
+      }
+    };
+
     fetchReportsData();
+    fetchSavedReports();
 
     const handleUserChange = () => {
       fetchReportsData();
+      fetchSavedReports();
     };
     window.addEventListener('tg-user-changed', handleUserChange);
     return () => window.removeEventListener('tg-user-changed', handleUserChange);
@@ -827,25 +865,56 @@ export default function ReportsPage() {
     }
   };
 
-  const handleGenerateReport = (format, range) => {
+  const handleGenerateReport = async (format, range) => {
     const reportName = `${range} Security Report`;
-    const period = range === "Last 7 days" ? "Jun 16 â€“ Jun 22, 2026" : "May 23 â€“ Jun 22, 2026";
+    const now = new Date();
+    const rangeDays = range === "Last 7 days" ? 7 : 90;
+    const startDate = new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000);
+    const period = `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
     const newReport = {
-      id: `RPT-0${reportsList.length + 143}`,
       name: reportName,
       type: "Ad-hoc compliance",
       period: period,
-      generated: "Just now",
+      generatedAt: Date.now(),
       format: format,
       size: "1.8 MB",
       status: "Ready",
       summary: `Generated summary: analyzed ${threads.length} threads. Flagged ${threatsCount} high-risk items. Cryptographic hash-chain validation verified.`,
     };
-    setReportsList(prev => [newReport, ...prev]);
-    
-    // Automatically trigger export for the newly generated report
-    handleDownload(newReport);
+
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newReport),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        const displayReport = {
+          id: `RPT-${String(saved.id).padStart(4, "0")}`,
+          name: saved.name,
+          type: saved.type,
+          period: saved.period,
+          generated: "Just now",
+          format: saved.format,
+          size: saved.size || "1.8 MB",
+          status: saved.status,
+          summary: saved.summary,
+        };
+        setReportsList(prev => [displayReport, ...prev]);
+        handleDownload(displayReport);
+      }
+    } catch {
+      // offline fallback — still allow local generation
+      const fallbackReport = {
+        id: `RPT-0${reportsList.length + 143}`,
+        ...newReport,
+        generated: "Just now",
+      };
+      setReportsList(prev => [fallbackReport, ...prev]);
+      handleDownload(fallbackReport);
+    }
   };
 
   return (
@@ -1168,7 +1237,7 @@ export default function ReportsPage() {
       `}</style>
 
       <div className="reports-page-root">
-        <PageHeader />
+        <PageHeader lastUpdated={reportsList.length > 0 ? reportsList[0].generated : "—"} />
         <KpiStrip kpis={dynamicKpis} />
 
         <div className="chart-grid">

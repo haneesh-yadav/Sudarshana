@@ -30,7 +30,7 @@ const STATUS_STYLE = {
 };
 
 /* ---------- filter row ---------- */
-function FilterRow({ active, setActive, counts }) {
+function FilterRow({ active, setActive, counts, threads }) {
   return (
     <div className="filter-row">
       <div style={{ display: "flex", alignItems: "center" }}>
@@ -50,7 +50,7 @@ function FilterRow({ active, setActive, counts }) {
       <div className="toggles">
         <div className="toggle-row">
           <span><span className="material-icons-round" style={{ fontSize: 13, marginRight: 4, verticalAlign: -2 }}>tag</span>Avg. trust score</span>
-          <span className="avg-trust">91.4%</span>
+          <span className="avg-trust">{threads.length > 0 ? Math.round(threads.reduce((s, t) => s + t.trust, 0) / threads.length) : 0}%</span>
         </div>
       </div>
     </div>
@@ -407,12 +407,38 @@ const formatEmailDate = (timestamp) => {
 };
 
 /* ---------- drawer (thread inspector) ---------- */
-function ThreadDrawer({ thread, onClose, onHijack, onSendReply, replyText, setReplyText, scanForLeaks, onLaunchSandbox }) {
-  if (!thread) return null;
-  const s = STATUS_STYLE[thread.status] || STATUS_STYLE.Verified;
+function ThreadDrawer({ thread, onClose, onHijack, onSendReply, replyText, setReplyText, onLaunchSandbox }) {
+  const s = STATUS_STYLE[thread?.status] || STATUS_STYLE.Verified;
   
-  const isLowTrust = thread.status !== "Verified" || thread.trust < 75 || thread.chain === "broken";
-  const activeLeak = (isLowTrust && scanForLeaks) ? scanForLeaks(replyText) : null;
+  const isLowTrust = thread && (thread.status !== "Verified" || thread.trust < 75 || thread.chain === "broken");
+  const [activeLeak, setActiveLeak] = React.useState(null);
+  const debounceRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!isLowTrust || !replyText || replyText.trim().length < 4) {
+      setActiveLeak(null);
+      return;
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/dlp/scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: replyText }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setActiveLeak(data.clean === "true" ? null : data);
+        }
+      } catch {
+        setActiveLeak(null);
+      }
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [replyText, isLowTrust]);
+
+  if (!thread) return null;
 
   const baseTime = 1719000000000; // Fixed baseline timestamp to ensure pure renders
   const timeline = thread.rawReport ? thread.rawReport.messages.map((m, idx) => ({
@@ -702,47 +728,41 @@ function ThreadDrawer({ thread, onClose, onHijack, onSendReply, replyText, setRe
 
 
 /* ---------- Hijack Scenario Selection Modal ---------- */
-const HIJACK_SCENARIOS = [
-  {
-    id: "wire_fraud",
-    label: "Wire Fraud",
-    icon: "account_balance",
-    tag: "Financial BEC",
-    tagColor: "var(--red)",
-    desc: "Attacker substitutes legitimate bank routing details with fraudulent ones to redirect payments.",
-    body: "URGENT: We have updated our banking details effective immediately. Please re-direct all outstanding and future invoice payments to our new account: Routing 887543210, Account No. 4492817736 (Bank of the Caymans). This is time-sensitive and affects the current payment cycle."
-  },
-  {
-    id: "bec_fraud",
-    label: "CEO / BEC Fraud",
-    icon: "person_pin",
-    tag: "Authority Impersonation",
-    tagColor: "#f90",
-    desc: "Spoofed executive authority demanding an immediate wire transfer without verification channels.",
-    body: "Per strict instruction from our CEO: please execute a same-day wire transfer for USD 87,500 to the third-party account on file. Do not discuss with finance colleagues â€” this is a confidential acquisition per board executive directive. Confirmation to follow."
-  },
-  {
-    id: "account_takeover",
-    label: "Account Takeover",
-    icon: "manage_accounts",
-    tag: "Credential Phishing",
-    tagColor: "#7c6ef7",
-    desc: "Fake security alert pressuring the recipient to click a lookalike login page to harvest credentials.",
-    body: "Security Alert: Our systems detected unusual access on your account. You must verify your credentials within 2 hours to prevent lockout. Click here to confirm your identity: http://xn--nrthbrdge-p5a.com/verify-account â€” Ignore this message and your access will be suspended."
-  },
-  {
-    id: "malware",
-    label: "Malware Distribution",
-    icon: "bug_report",
-    tag: "Sideload Attack",
-    tagColor: "#e8543f",
-    desc: "Fake IT compliance patch delivered as an APK sideload link to install remote-access malware.",
-    body: "IT Compliance Notice: A mandatory security patch must be installed on all company devices before end of business today. Failure to install will result in network lockout. Download the patch here: http://internal-security-update.xyz/download/compliance-patch-2025.apk"
-  }
-];
+const HIJACK_ICONS = {
+  "wire-fraud": { icon: "account_balance", tag: "Financial BEC", tagColor: "var(--red)" },
+  "ceo-fraud": { icon: "person_pin", tag: "Authority Impersonation", tagColor: "#f90" },
+  "account-takeover": { icon: "manage_accounts", tag: "Credential Phishing", tagColor: "#7c6ef7" },
+  "malware": { icon: "bug_report", tag: "Sideload Attack", tagColor: "#e8543f" },
+};
 
 function HijackScenarioModal({ pending, onExecute, onCancel }) {
   const [chosen, setChosen] = React.useState(null);
+  const [scenarios, setScenarios] = React.useState([]);
+
+  React.useEffect(() => {
+    if (!pending) return;
+    const fetchScenarios = async () => {
+      try {
+        const res = await fetch("/api/threads/hijack-scenarios");
+        if (res.ok) {
+          const data = await res.json();
+          setScenarios(data.map(s => ({
+            id: s.id,
+            label: s.name,
+            icon: HIJACK_ICONS[s.id]?.icon || "security",
+            tag: HIJACK_ICONS[s.id]?.tag || "Attack",
+            tagColor: HIJACK_ICONS[s.id]?.tagColor || "var(--red)",
+            desc: s.description,
+            body: s.body,
+          })));
+        }
+      } catch {
+        // fallback to minimal list
+        setScenarios([]);
+      }
+    };
+    fetchScenarios();
+  }, [pending]);
 
   if (!pending) return null;
 
@@ -761,7 +781,7 @@ function HijackScenarioModal({ pending, onExecute, onCancel }) {
             Choose a red-team scenario to inject into this message. Sudarshana will detect the
             tampered content and break the cryptographic chain.
           </p>
-          {HIJACK_SCENARIOS.map(s => (
+          {scenarios.map(s => (
             <div key={s.id}
                  onClick={() => setChosen(s.id)}
                  style={{
@@ -797,7 +817,7 @@ function HijackScenarioModal({ pending, onExecute, onCancel }) {
             className="btn-primary"
             style={{ background: chosen ? "#e8543f" : undefined, opacity: chosen ? 1 : 0.45, cursor: chosen ? "pointer" : "default" }}
             disabled={!chosen}
-            onClick={() => { const s = HIJACK_SCENARIOS.find(x => x.id === chosen); if (s) onExecute(s.body); }}
+            onClick={() => { const s = scenarios.find(x => x.id === chosen); if (s) onExecute(s.body); }}
           >
             <span className="material-icons-round" style={{ fontSize: 14, marginRight: 4 }}>settings_backup_restore</span>
             Inject Tampered Message
@@ -1182,61 +1202,6 @@ export default function ThreadsPage() {
     }
   };
 
-  const scanForLeaks = (text) => {
-    if (!text) return null;
-    
-    // 1. Credit Cards
-    const ccRegex = /\b(?:\d[ -]*?){13,16}\b/;
-    const ccMatch = text.match(ccRegex);
-    if (ccMatch) {
-      const clean = ccMatch[0].replace(/[\s-]/g, "");
-      const obscured = "****-****-****-" + clean.slice(-4);
-      return { type: "Credit Card Details", value: obscured };
-    }
-
-    // 2. SSN / Personal Identifiers
-    const ssnRegex = /\b\d{3}-\d{2}-\d{4}\b/;
-    const ssnMatch = text.match(ssnRegex);
-    if (ssnMatch) {
-      return { type: "Social Security Number (SSN)", value: "***-**-" + ssnMatch[0].slice(-4) };
-    }
-
-    // 3. API Keys / Secrets / Auth Tokens
-    const apiKeyRegex = /\b(?:key|secret|token|password|auth|private|passwd)\s*[:=]\s*["']?[a-zA-Z0-9_*-]{16,}["']?\b/i;
-    const highEntropyRegex = /\b[a-zA-Z0-9+/_-]{32,}\b/;
-    
-    const apiMatch = text.match(apiKeyRegex);
-    if (apiMatch) {
-      return { type: "API Credentials / Token", value: apiMatch[0].substring(0, 10) + "..." };
-    }
-    const entropyMatch = text.match(highEntropyRegex);
-    if (entropyMatch) {
-      const val = entropyMatch[0];
-      if (!/^\d+$/.test(val) && !val.includes(":") && !val.startsWith("TH-") && !val.startsWith("MSG-")) {
-        return { type: "Cryptographic Key / API Secret", value: val.substring(0, 8) + "..." };
-      }
-    }
-
-    // 4. Bank Routing / Account Info for Wire Transfers
-    const routingRegex = /\b\d{9}\b/;
-    const ibanRegex = /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/;
-    const wireKeywordRegex = /\b(?:routing|account|iban|swift|routing#|bank account|wire details)\b/i;
-    
-    const routingMatch = text.match(routingRegex);
-    if (routingMatch) {
-      return { type: "Bank Routing Number", value: "*****" + routingMatch[0].slice(-4) };
-    }
-    const ibanMatch = text.match(ibanRegex);
-    if (ibanMatch) {
-      return { type: "International Bank Account (IBAN)", value: ibanMatch[0].substring(0, 4) + "..." + ibanMatch[0].slice(-4) };
-    }
-    if (wireKeywordRegex.test(text) && /\d{4,}/.test(text)) {
-      return { type: "Wire Transfer / Bank Account Info", value: "Sensitive Keywords + Digits" };
-    }
-
-    return null;
-  };
-
   const fetchThreads = async (updateSelectedId = null) => {
     try {
       const userId = localStorage.getItem("selectedUserId") || "";
@@ -1290,14 +1255,25 @@ export default function ThreadsPage() {
     if (!force && selected) {
       const isLowTrust = selected.status !== "Verified" || selected.trust < 75 || selected.chain === "broken";
       if (isLowTrust) {
-        const leak = scanForLeaks(replyText);
-        if (leak) {
-          setLeakWarning({
-            type: leak.type,
-            value: leak.value,
-            threadId: threadId
+        try {
+          const dlpRes = await fetch("/api/dlp/scan", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: replyText }),
           });
-          return; // Intercept send
+          if (dlpRes.ok) {
+            const dlpData = await dlpRes.json();
+            if (dlpData.clean !== "true") {
+              setLeakWarning({
+                type: dlpData.type,
+                value: dlpData.value,
+                threadId: threadId
+              });
+              return; // Intercept send
+            }
+          }
+        } catch {
+          // If DLP service is unreachable, allow send
         }
       }
     }
@@ -1961,7 +1937,7 @@ export default function ThreadsPage() {
         }
       `}</style>
       <div className="threads-page-root">
-        <FilterRow active={active} setActive={setActive} counts={counts} />
+        <FilterRow active={active} setActive={setActive} counts={counts} threads={threads} />
         <ThreadsTable threads={filtered} onOpen={setSelected} selectedId={selected?.id} />
 
         <ThreadDrawer
@@ -1971,7 +1947,6 @@ export default function ThreadsPage() {
           onSendReply={handleSendReply}
           replyText={replyText}
           setReplyText={setReplyText}
-          scanForLeaks={scanForLeaks}
           onLaunchSandbox={async (link) => {
             setSandboxLink(link);
             try {
