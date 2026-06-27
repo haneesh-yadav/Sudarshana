@@ -165,7 +165,8 @@ public class ThreadController {
                     "warning",
                     "danger",
                     "Hijack simulation executed",
-                    "Thread '" + threadId + "' was tampered with. Cryptographic chain is now broken."
+                    "Thread '" + threadId + "' was tampered with. Cryptographic chain is now broken.",
+                    false
                 ));
             }
             return ResponseEntity.ok(Map.of(
@@ -204,7 +205,8 @@ public class ThreadController {
                 "block",
                 "warning",
                 "Domain blacklisted",
-                "Domain '" + domain + "' has been added to the security blacklist."
+                "Domain '" + domain + "' has been added to the security blacklist.",
+                false
             ));
         }
 

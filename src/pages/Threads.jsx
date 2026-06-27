@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import mapReportToThread from '../utils/mapReportToThread.js';
 import { createPortal } from 'react-dom';
 import { showToast } from '../utils/toast.js';
@@ -898,7 +898,7 @@ function LinkSandboxModal({ link, onClose, onAddToBlacklist }) {
 
   const verdictText = isClean ? "SAFE" : isHomoglyph ? "HIGH RISK (Phishing)" : isBlacklisted ? "HIGH RISK (Blacklisted)" : "SUSPICIOUS";
 
-  const logSequence = [
+  const logSequence = useMemo(() => [
     { text: "[SYSTEM] Initializing virtualized browser container (Chromium instance #772)...", delay: 300 },
     { text: "[SYSTEM] Container boot successful. Creating isolated tmpfs sandbox mount...", delay: 600 },
     { text: "[NETWORK] Establishing encrypted proxy tunnel through node: 198.51.100.82...", delay: 900 },
@@ -910,7 +910,7 @@ function LinkSandboxModal({ link, onClose, onAddToBlacklist }) {
     { text: "[AI] Running computer vision similarity scan against trusted portal baselines...", delay: 2700 },
     { text: "[AI] Processing page structure indicators (input fields, action endpoints)...", delay: 3000 },
     { text: `[VERDICT] Sandbox execution complete. Verdict: ${verdictText}. Displaying interactive visual analysis.`, delay: 3200 }
-  ];
+  ], [link, hostInfo, verdictText]);
 
   useEffect(() => {
     setScreenshotError(false);
@@ -940,7 +940,7 @@ function LinkSandboxModal({ link, onClose, onAddToBlacklist }) {
     });
 
     return () => timers.forEach(t => clearTimeout(t));
-  }, [link]);
+  }, [link, logSequence]);
 
   if (!link) return null;
 

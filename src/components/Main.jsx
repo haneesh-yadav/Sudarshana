@@ -2940,7 +2940,7 @@ export default function LandingPage() {
                 Â© 2026 Sudarshana. All rights reserved.
               </span>
               <div className="new-footer-legal-links">
-                <a className="new-footer-legal-link" >GPCSSI 2026</a>
+                <a className="new-footer-legal-link" >Sudarshana 2026</a>
               </div>
             </div>
             

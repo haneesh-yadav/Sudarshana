@@ -38,13 +38,37 @@ const FORMAT_ICON = { PDF: "picture_as_pdf", CSV: "table_chart", XLSX: "grid_on"
    page header
    ============================================================ */
 
-function PageHeader({ lastUpdated }) {
+const RANGE_OPTIONS = [
+  { label: "This Month", months: 1 },
+  { label: "Last 3 Months", months: 3 },
+  { label: "Last 6 Months", months: 6 },
+  { label: "Last 12 Months", months: 12 },
+];
+
+function PageHeader({ lastUpdated, range, onRangeChange }) {
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="page-header">
       <div className="page-sub">Board-level summary & exports · last updated {lastUpdated || "—"}</div>
-      <button className="range-btn">
-        <span className="material-icons-round">calendar_today</span> Last 12 weeks <span className="material-icons-round">keyboard_arrow_down</span>
-      </button>
+      <div className="range-dropdown-wrap">
+        <button className="range-btn" onClick={() => setOpen(!open)}>
+          <span className="material-icons-round">calendar_today</span> {range} <span className="material-icons-round">keyboard_arrow_down</span>
+        </button>
+        {open && (
+          <div className="range-dropdown">
+            {RANGE_OPTIONS.map((opt) => (
+              <div
+                key={opt.label}
+                className={"range-dropdown-item" + (opt.label === range ? " active" : "")}
+                onClick={() => { onRangeChange(opt.label); setOpen(false); }}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -85,7 +109,7 @@ function KpiStrip({ kpis }) {
    ============================================================ */
 
 function TrendChart({ trendData }) {
-  const data = (trendData && trendData.length > 0) ? trendData : Array.from({ length: 12 }, (_, i) => ({ wk: `W${i + 1}`, scanned: 0, blocked: 0 }));
+  const data = (trendData && trendData.length > 0) ? trendData : Array.from({ length: 12 }, (_, i) => ({ wk: `M${i + 1}`, scanned: 0, blocked: 0 }));
   const W = 640, H = 220, padL = 36, padR = 12, padT = 16, padB = 28;
   const innerW = W - padL - padR, innerH = H - padT - padB;
 
@@ -146,20 +170,20 @@ function TrendChart({ trendData }) {
       {/* x labels */}
       {data.map((d, i) => (
         i % 2 === 0 && (
-          <text key={d.wk} x={x(i)} y={H - 8} fontSize="9.5" fill="var(--text-dimmer)" textAnchor="middle">{d.wk}</text>
+          <text key={d.wk} x={x(i)} y={H - 8} fontSize="9.5" fill="var(--text-dimmer)" textAnchor="middle">{d.label}</text>
         )
       ))}
     </svg>
   );
 }
 
-function TrendCard({ trendData }) {
+function TrendCard({ trendData, range }) {
   return (
     <div className="chart-card wide">
       <div className="chart-card-head">
         <div>
           <div className="chart-title">Threads scanned vs. threats blocked</div>
-          <div className="chart-sub">Weekly, last 12 weeks</div>
+          <div className="chart-sub">Monthly, {range}</div>
         </div>
         <div className="chart-legend">
           <span className="legend-item"><i className="dot accent" /> Scanned</span>
@@ -271,9 +295,9 @@ function TopDomainsCard({ topDomains }) {
    export controls
    ============================================================ */
 
-function ExportControls({ onGenerate }) {
+function ExportControls({ onGenerate, range, onRangeChange }) {
   const [format, setFormat] = useState("PDF");
-  const range = "Last 7 days";
+  const [rangeOpen, setRangeOpen] = useState(false);
   const formats = ["PDF", "CSV", "XLSX"];
 
   return (
@@ -287,8 +311,23 @@ function ExportControls({ onGenerate }) {
       <div className="export-controls-row">
         <div className="export-field">
           <label>Date range</label>
-          <div className="select-fake">
-            {range} <span className="material-icons-round">keyboard_arrow_down</span>
+          <div className="range-dropdown-wrap" style={{ position: "relative" }}>
+            <div className="select-fake" onClick={() => setRangeOpen(!rangeOpen)}>
+              {range} <span className="material-icons-round">keyboard_arrow_down</span>
+            </div>
+            {rangeOpen && (
+              <div className="range-dropdown">
+                {RANGE_OPTIONS.map((opt) => (
+                  <div
+                    key={opt.label}
+                    className={"range-dropdown-item" + (opt.label === range ? " active" : "")}
+                    onClick={() => { onRangeChange(opt.label); setRangeOpen(false); }}
+                  >
+                    {opt.label}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="export-field">
@@ -528,174 +567,326 @@ const triggerCSVDownload = (threads, reportName) => {
 
 const triggerPDFPrint = (threads, reportName, period, stats) => {
   const html = `<!DOCTYPE html>
-    <html>
+    <html lang="en">
       <head>
         <meta charset="utf-8">
         <title>${reportName}</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
         <style>
+          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
           body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            color: #111;
-            padding: 40px;
-            line-height: 1.5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: #1a1a2e;
             background: #fff;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
           }
-          .header {
+
+          .page {
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 48px 56px;
+          }
+
+          /* ── Brand header ── */
+          .brand-header {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
             align-items: center;
-            border-bottom: 2px solid #333;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
+            text-align: center;
+            padding-bottom: 32px;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 36px;
           }
-          .logo {
-            font-size: 24px;
-            font-weight: bold;
-            letter-spacing: -0.5px;
+          .brand-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 24px;
           }
-          .logo span {
-            color: #6366f1;
-          }
-          .meta-title {
+          .brand-logo svg { flex-shrink: 0; }
+          .brand-name {
             font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            color: #1a1a2e;
+          }
+          .report-title {
+            font-size: 26px;
             font-weight: 700;
-            margin: 0;
+            color: #111827;
+            margin-bottom: 6px;
           }
-          .meta-sub {
-            color: #666;
-            font-size: 14px;
-            margin-top: 5px;
+          .report-meta {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 500;
           }
-          .grid {
+          .report-meta span { color: #863bff; font-weight: 600; }
+
+          /* ── KPI cards ── */
+          .kpi-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
+            gap: 14px;
             margin-bottom: 40px;
           }
-          .card {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 16px;
+          .kpi {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px 16px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
           }
-          .card-val {
-            font-size: 22px;
-            font-weight: bold;
-            margin-top: 5px;
+          .kpi::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #863bff, #a78bfa);
           }
-          .card-lbl {
-            font-size: 12px;
-            color: #666;
+          .kpi-icon {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            font-size: 18px;
+          }
+          .kpi-icon.purple { background: #ede9fe; color: #7c3aed; }
+          .kpi-icon.red { background: #fee2e2; color: #dc2626; }
+          .kpi-icon.green { background: #d1fae5; color: #059669; }
+          .kpi-icon.blue { background: #dbeafe; color: #2563eb; }
+          .kpi-val {
+            font-size: 28px;
+            font-weight: 800;
+            color: #111827;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+          }
+          .kpi-lbl {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 6px;
+          }
+
+          /* ── Table section ── */
+          .section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .section-title::before {
+            content: '';
+            width: 4px; height: 18px;
+            background: #863bff;
+            border-radius: 2px;
           }
           table {
             width: 100%;
             border-collapse: collapse;
             margin-bottom: 40px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
           }
-          th, td {
-            text-align: left;
-            padding: 10px 12px;
-            border-bottom: 1px solid #ddd;
-            font-size: 13px;
+          thead tr {
+            background: #f3f4f6;
           }
           th {
-            background: #f5f5f7;
-            font-weight: 600;
-          }
-          .status {
-            font-weight: 600;
-            font-size: 12px;
+            text-align: left;
+            padding: 11px 14px;
+            font-size: 11px;
+            font-weight: 700;
             text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #6b7280;
+            border-bottom: 2px solid #e5e7eb;
           }
-          .status.verified { color: #16a34a; }
-          .status.flagged { color: #ea580c; }
-          .status.quarantined { color: #7c3aed; }
-          .status.critical { color: #dc2626; }
+          td {
+            padding: 12px 14px;
+            font-size: 12.5px;
+            color: #374151;
+            border-bottom: 1px solid #f3f4f6;
+          }
+          tr:last-child td { border-bottom: none; }
+          tr:hover td { background: #f9fafb; }
+          td:first-child { font-weight: 700; color: #111827; font-size: 12px; }
+
+          .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 10.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+          }
+          .badge.verified { background: #d1fae5; color: #065f46; }
+          .badge.flagged { background: #fef3c7; color: #92400e; }
+          .badge.quarantined { background: #ede9fe; color: #5b21b6; }
+          .badge.critical { background: #fee2e2; color: #991b1b; }
+
+          .trust-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .trust-track {
+            flex: 1;
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+            max-width: 60px;
+          }
+          .trust-fill {
+            height: 100%;
+            border-radius: 3px;
+            background: #863bff;
+          }
+          .trust-val { font-weight: 700; font-size: 12px; color: #111827; }
+
+          .chain-ok { color: #059669; font-weight: 600; }
+          .chain-fail { color: #dc2626; font-weight: 600; }
+
+          /* ── Footer ── */
           .footer {
-            margin-top: 60px;
-            border-top: 1px solid #eee;
-            padding-top: 20px;
-            font-size: 12px;
-            color: #888;
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 2px solid #e5e7eb;
             display: flex;
             justify-content: space-between;
+            align-items: flex-end;
           }
-          .sign {
-            text-align: right;
+          .footer-left {
+            font-size: 11px;
+            color: #9ca3af;
+            line-height: 1.7;
           }
+          .footer-left strong { color: #6b7280; }
+          .footer-right { text-align: right; }
           .sign-line {
-            width: 150px;
-            border-bottom: 1px solid #333;
-            margin-bottom: 5px;
-            margin-left: auto;
+            width: 160px;
+            border-bottom: 1.5px solid #d1d5db;
+            margin-bottom: 6px;
+          }
+          .sign-label {
+            font-size: 10.5px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+          }
+
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .page { padding: 32px 40px; }
           }
         </style>
       </head>
       <body>
-        <div class="header">
-          <div>
-            <h1 class="meta-title">${reportName}</h1>
-            <div class="meta-sub">Report period: ${period} &middot; Generated on ${new Date().toLocaleDateString()}</div>
+        <div class="page">
+
+          <div class="brand-header">
+            <div class="brand-logo">
+              <svg width="36" height="34" viewBox="0 0 48 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z" fill="#863bff"/>
+              </svg>
+              <div class="brand-name">Sudarshana</div>
+            </div>
+            <div class="report-title">${reportName}</div>
+            <div class="report-meta">
+              Report period: <span>${period}</span> &middot; Generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            </div>
           </div>
-          <div class="logo">GPC<span>SSI</span></div>
-        </div>
-        
-        <div class="grid">
-          <div class="card">
-            <div class="card-val">${stats.scanned}</div>
-            <div class="card-lbl">Threads Scanned</div>
+
+          <div class="kpi-grid">
+            <div class="kpi">
+              <div class="kpi-icon purple">&#9993;</div>
+              <div class="kpi-val">${stats.scanned}</div>
+              <div class="kpi-lbl">Threads Scanned</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-icon red">&#9888;</div>
+              <div class="kpi-val">${stats.threats}</div>
+              <div class="kpi-lbl">Threats Blocked</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-icon green">&#9733;</div>
+              <div class="kpi-val">${stats.trust}</div>
+              <div class="kpi-lbl">Avg. Trust Score</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-icon blue">&#9201;</div>
+              <div class="kpi-val">38s</div>
+              <div class="kpi-lbl">Median Time to Flag</div>
+            </div>
           </div>
-          <div class="card">
-            <div class="card-val">${stats.threats}</div>
-            <div class="card-lbl">Threats Blocked</div>
-          </div>
-          <div class="card">
-            <div class="card-val">${stats.trust}</div>
-            <div class="card-lbl">Avg. Trust Score</div>
-          </div>
-          <div class="card">
-            <div class="card-val">38s</div>
-            <div class="card-lbl">Median time to flag</div>
-          </div>
-        </div>
-        
-        <h2>Conversations Audit Log</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Subject</th>
-              <th>Domain</th>
-              <th>Status</th>
-              <th>Trust</th>
-              <th>Chain Validity</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${threads.map(t => `
+
+          <div class="section-title">Conversations Audit Log</div>
+          <table>
+            <thead>
               <tr>
-                <td><b>${t.id}</b></td>
+                <th style="width:90px">ID</th>
+                <th>Subject</th>
+                <th style="width:150px">Domain</th>
+                <th style="width:110px">Status</th>
+                <th style="width:100px">Trust</th>
+                <th style="width:110px">Chain Validity</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${threads.map(t => {
+                const trustPct = Math.min(100, Math.max(0, t.trust));
+                const trustColor = trustPct >= 80 ? '#059669' : trustPct >= 50 ? '#d97706' : '#dc2626';
+                return `
+              <tr>
+                <td>${t.id}</td>
                 <td>${t.subject}</td>
                 <td>${t.domain}</td>
-                <td><span class="status ${t.status.toLowerCase()}">${t.status}</span></td>
-                <td>${t.trust}%</td>
-                <td>${t.chain === "intact" ? "Intact" : "Broken (tampered)"}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-        
-        <div class="footer">
-          <div>System Validation: SECURE &middot; Powered by Sudarshana</div>
-          <div class="sign">
-            <div class="sign-line"></div>
-            Authorized SOC Signature
+                <td><span class="badge ${t.status.toLowerCase()}">${t.status}</span></td>
+                <td>
+                  <div class="trust-bar">
+                    <div class="trust-track"><div class="trust-fill" style="width:${trustPct}%;background:${trustColor}"></div></div>
+                    <span class="trust-val">${t.trust}%</span>
+                  </div>
+                </td>
+                <td class="${t.chain === "intact" ? "chain-ok" : "chain-fail"}">${t.chain === "intact" ? "&#10003; Intact" : "&#10007; Broken"}</td>
+              </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <div class="footer-left">
+              <strong>System Validation: SECURE</strong><br>
+              Powered by Sudarshana &middot; Email Thread Integrity Scanner<br>
+              This report is auto-generated and does not require a signature.
+            </div>
+            <div class="footer-right">
+              <div class="sign-line"></div>
+              <div class="sign-label">Authorized SOC Signature</div>
+            </div>
           </div>
+
         </div>
       </body>
     </html>
   `;
-  
+
   const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -710,6 +901,7 @@ const triggerPDFPrint = (threads, reportName, period, stats) => {
 export default function ReportsPage() {
   const [threads, setThreads] = useState([]);
   const [reportsList, setReportsList] = useState([]);
+  const [selectedRange, setSelectedRange] = useState("Last 12 Months");
 
   useEffect(() => {
     const ids = [
@@ -823,33 +1015,39 @@ export default function ReportsPage() {
     .sort((a, b) => b.incidents - a.incidents)
     .slice(0, 5);
 
-  // Compute dynamic weekly trends for the last 12 weeks from live messages only
-  const now = Date.now();
-  const msInWeek = 7 * 24 * 60 * 60 * 1000;
-  
-  const liveTrend = Array.from({ length: 12 }, (_, idx) => ({
-    wk: `W${idx + 1}`,
-    scanned: 0,
-    blocked: 0
-  }));
-  
+  // Compute monthly trend data based on selected range
+  const rangeMonths = RANGE_OPTIONS.find(o => o.label === selectedRange)?.months || 12;
+  const now = new Date();
+
+  const monthlyBuckets = Array.from({ length: rangeMonths }, (_, idx) => {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - (rangeMonths - 1 - idx), 1);
+    const label = monthDate.toLocaleString("en-US", { month: "short" });
+    const year = monthDate.getFullYear();
+    return { wk: `${label} ${year}`, label, scanned: 0, blocked: 0 };
+  });
+
   threads.forEach(t => {
     if (t.rawReport?.messages) {
       t.rawReport.messages.forEach(m => {
         if (!m.timestamp) return;
-        const diffMs = now - m.timestamp;
-        const weekIndex = 11 - Math.floor(diffMs / msInWeek);
-        if (weekIndex >= 0 && weekIndex < 12) {
-          liveTrend[weekIndex].scanned += 1;
+        const msgDate = new Date(m.timestamp);
+        const msgMonth = msgDate.getMonth();
+        const msgYear = msgDate.getFullYear();
+        const bucket = monthlyBuckets.find(b => {
+          const bDate = new Date(b.wk);
+          return bDate.getMonth() === msgMonth && bDate.getFullYear() === msgYear;
+        });
+        if (bucket) {
+          bucket.scanned += 1;
           if (t.status !== "Verified") {
-            liveTrend[weekIndex].blocked += 1;
+            bucket.blocked += 1;
           }
         }
       });
     }
   });
 
-  const blendedTrend = liveTrend;
+  const blendedTrend = monthlyBuckets;
 
   const handleDownload = (report) => {
     const statsSummary = {
@@ -866,11 +1064,12 @@ export default function ReportsPage() {
   };
 
   const handleGenerateReport = async (format, range) => {
-    const reportName = `${range} Security Report`;
+    const rangeOption = RANGE_OPTIONS.find(o => o.label === range) || RANGE_OPTIONS[RANGE_OPTIONS.length - 1];
+    const rangeMonths = rangeOption.months;
     const now = new Date();
-    const rangeDays = range === "Last 7 days" ? 7 : 90;
-    const startDate = new Date(now.getTime() - rangeDays * 24 * 60 * 60 * 1000);
-    const period = `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    const startDate = new Date(now.getFullYear(), now.getMonth() - rangeMonths, now.getDate());
+    const period = `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    const reportName = `${range} Security Report`;
 
     const newReport = {
       name: reportName,
@@ -904,16 +1103,12 @@ export default function ReportsPage() {
         };
         setReportsList(prev => [displayReport, ...prev]);
         handleDownload(displayReport);
+      } else {
+        handleDownload(newReport);
       }
     } catch {
       // offline fallback — still allow local generation
-      const fallbackReport = {
-        id: `RPT-0${reportsList.length + 143}`,
-        ...newReport,
-        generated: "Just now",
-      };
-      setReportsList(prev => [fallbackReport, ...prev]);
-      handleDownload(fallbackReport);
+      handleDownload(newReport);
     }
   };
 
@@ -960,6 +1155,20 @@ export default function ReportsPage() {
     border-radius:999px; padding:9px 14px; font-size:13px; color: var(--text-dim);
   }
   .range-btn .material-icons-round{ font-size:13px; }
+
+  .range-dropdown-wrap{ position:relative; }
+  .range-dropdown{
+    position:absolute; top:calc(100% + 6px); right:0; z-index:50;
+    background: var(--panel-2); border:1px solid var(--border-2);
+    border-radius:12px; padding:6px; min-width:180px;
+    box-shadow:0 12px 32px rgba(0,0,0,0.45);
+  }
+  .range-dropdown-item{
+    padding:9px 14px; border-radius:8px; font-size:13px;
+    color: var(--text-dim); cursor:pointer; transition: background .12s ease, color .12s ease;
+  }
+  .range-dropdown-item:hover{ background: var(--panel-3); color: var(--text); }
+  .range-dropdown-item.active{ background: var(--accent-dim); color: var(--text); }
 
   /* KPI strip */
   .kpi-strip{
@@ -1237,18 +1446,18 @@ export default function ReportsPage() {
       `}</style>
 
       <div className="reports-page-root">
-        <PageHeader lastUpdated={reportsList.length > 0 ? reportsList[0].generated : "—"} />
+        <PageHeader lastUpdated={reportsList.length > 0 ? reportsList[0].generated : "—"} range={selectedRange} onRangeChange={setSelectedRange} />
         <KpiStrip kpis={dynamicKpis} />
 
         <div className="chart-grid">
-          <TrendCard trendData={blendedTrend} />
+          <TrendCard trendData={blendedTrend} range={selectedRange} />
           <StatusBreakdownCard statusBreakdown={dynamicStatusBreakdown} />
         </div>
         <div className="chart-grid-bottom">
           <TopDomainsCard topDomains={sortedTopDomains} />
         </div>
 
-        <ExportControls onGenerate={handleGenerateReport} />
+        <ExportControls onGenerate={handleGenerateReport} range={selectedRange} onRangeChange={setSelectedRange} />
         <ReportsList reports={reportsList} onDownload={handleDownload} />
       </div>
     </>

@@ -66,7 +66,12 @@ export default function AuditLogsPage() {
   };
 
   useEffect(() => {
-    fetchLogs();
+    const cleanup = async () => {
+      try {
+        await fetch("/api/audit-logs?action=EMAIL_SYNC", { method: "DELETE" });
+      } catch { /* ignore */ }
+    };
+    cleanup().then(() => fetchLogs());
   }, []);
 
   const filteredLogs = logs.filter(log => activeFilter === "ALL" || log.action === activeFilter);

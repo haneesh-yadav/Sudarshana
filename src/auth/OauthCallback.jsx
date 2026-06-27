@@ -51,7 +51,7 @@ export default function OauthCallback() {
     };
 
     exchangeCode();
-  }, [navigate]);
+  }, [navigate, location, login]);
 
   return (
     <div

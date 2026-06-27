@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import mapReportToThread from '../utils/mapReportToThread.js';
+import { showToast } from '../utils/toast';
 
 /* Inline close icon -- doesn't depend on an icon font being loaded,
    so it always renders instead of going blank inside drawers/modals. */
@@ -263,8 +264,29 @@ function AuthDrawer({ domain, onClose }) {
         )}
 
         <div className="drawer-actions">
-          <button className="btn-secondary">View threads</button>
-          <button className="btn-primary">Enforce DMARC reject</button>
+          <button className="btn-secondary" onClick={() => {
+            localStorage.setItem("tg-search-query", domain.domain);
+            window.dispatchEvent(new CustomEvent("tg-search-changed", { detail: domain.domain }));
+            onClose();
+            window.location.href = "/threads";
+          }}>View threads</button>
+          <button className="btn-primary" onClick={async () => {
+            try {
+              const res = await fetch("/api/threads/blacklist", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ domain: domain.domain }),
+              });
+              if (res.ok) {
+                showToast("Domain '" + domain.domain + "' has been blacklisted.", "success");
+                onClose();
+              } else {
+                showToast("Failed to blacklist domain.", "error");
+              }
+            } catch {
+              showToast("Backend unreachable.", "error");
+            }
+          }}>Enforce DMARC reject</button>
         </div>
         </aside>
       </div>
@@ -644,8 +666,34 @@ function SenderDrawer({ sender, onClose }) {
         )}
 
         <div className="drawer-actions">
-          <button className="btn-secondary">View threads</button>
-          <button className="btn-primary">{sender.risk === "high" ? "Block sender" : "Mark trusted"}</button>
+          <button className="btn-secondary" onClick={() => {
+            const query = sender.email || sender.name;
+            localStorage.setItem("tg-search-query", query);
+            window.dispatchEvent(new CustomEvent("tg-search-changed", { detail: query }));
+            onClose();
+            window.location.href = "/threads";
+          }}>View threads</button>
+          <button className="btn-primary" onClick={async () => {
+            const senderEmail = sender.email || sender.name;
+            const endpoint = sender.risk === "high" ? "/api/senders/block" : "/api/senders/trust";
+            try {
+              const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: senderEmail }),
+              });
+              if (res.ok) {
+                showToast(sender.risk === "high"
+                  ? "Sender '" + sender.name + "' has been blocked."
+                  : "Sender '" + sender.name + "' marked as trusted.", "success");
+                onClose();
+              } else {
+                showToast("Failed to update sender.", "error");
+              }
+            } catch {
+              showToast("Backend unreachable.", "error");
+            }
+          }}>{sender.risk === "high" ? "Block sender" : "Mark trusted"}</button>
         </div>
         </aside>
       </div>

@@ -30,7 +30,6 @@ public class EmailSyncService {
     private final EmailMessageRepository emailMessageRepository;
     private final SudarshanaService SudarshanaService;
     private final GoogleOauthService googleOauthService;
-    private final com.sudarshana.server.repository.AuditLogRepository auditLogRepository;
 
     @Value("${sudarshana.sync.limit:100}")
     private int syncLimit;
@@ -39,13 +38,11 @@ public class EmailSyncService {
     public EmailSyncService(UserRepository userRepository,
                             EmailMessageRepository emailMessageRepository,
                             SudarshanaService SudarshanaService,
-                            GoogleOauthService googleOauthService,
-                            com.sudarshana.server.repository.AuditLogRepository auditLogRepository) {
+                            GoogleOauthService googleOauthService) {
         this.userRepository = userRepository;
         this.emailMessageRepository = emailMessageRepository;
         this.SudarshanaService = SudarshanaService;
         this.googleOauthService = googleOauthService;
-        this.auditLogRepository = auditLogRepository;
     }
 
     // Disabled PostConstruct to prevent deleting cached emails on every server startup.
@@ -207,24 +204,6 @@ public class EmailSyncService {
                 // Heal the cryptographic chains for all affected threads
                 for (String threadId : affectedThreads) {
                     SudarshanaService.healThreadChain(threadId);
-                }
-
-                if (auditLogRepository != null) {
-                    auditLogRepository.save(new com.sudarshana.server.model.AuditLog(
-                        System.currentTimeMillis(),
-                        user.getEmail(),
-                        "EMAIL_SYNC",
-                        "Detected " + toDelete.size() + " deleted/shifted emails in Gmail. Synced local DB and healed affected thread chains."
-                    ));
-                }
-            } else {
-                if (auditLogRepository != null) {
-                    auditLogRepository.save(new com.sudarshana.server.model.AuditLog(
-                        System.currentTimeMillis(),
-                        user.getEmail(),
-                        "EMAIL_SYNC",
-                        "Synchronized email folder. Total active messages: " + stored.size()
-                    ));
                 }
             }
 

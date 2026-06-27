@@ -1,6 +1,6 @@
 package com.sudarshana.server.repository;
 
-import com.sudarshana.server.model.AuditLog;
+import com.sudarshana.server.model.BlockedSender;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -8,11 +8,11 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 @Repository
-public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
+public interface BlockedSenderRepository extends JpaRepository<BlockedSender, Long> {
+
+    BlockedSender findBySenderEmail(String senderEmail);
 
     @Modifying
     @Transactional
-    @Query("DELETE FROM AuditLog a WHERE a.action = ?1")
-    void deleteByAction(String action);
+    void deleteBySenderEmail(String senderEmail);
 }
-

@@ -99,3 +99,5 @@ sudarshana/
 ## License
 
 MIT
+
+mvn -f server/pom.xml clean spring-boot:run
