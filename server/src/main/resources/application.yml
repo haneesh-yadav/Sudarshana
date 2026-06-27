@@ -56,16 +56,9 @@ spring:
     activate:
       on-profile: postgres
   datasource:
-    url: jdbc:${SPRING_DATASOURCE_URL}
+    url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      maximum-pool-size: ${HIKARI_MAX_POOL:20}
-      minimum-idle: ${HIKARI_MIN_IDLE:5}
-      idle-timeout: 60000
-      max-lifetime: 1800000
-      connection-timeout: 30000
   jpa:
     hibernate:
       ddl-auto: update
@@ -73,7 +66,6 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
   h2:
     console:
